@@ -1,0 +1,355 @@
+---
+title: "clase03-ModelosEstadisticos"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+(~10) podemos usar la funcion model.matrix
+El objeto 'trees' es un df. (model.matrix convierte a 0s y 1s ~0:15)
+```{r}
+# ?model.matrix
+# la '~' separa a la variable 'y' del lado izq. y 'x' del lado der.
+# '+' indica que tenemos mas de una variable para nuestras variables 'x' o 'y'
+mat <- with(trees, model.matrix(log(Volume) ~ log(Height) + log(Girth)))
+mat
+```
+¿Cómo interpretamos los nombres de las columnas de mat?
+Observamos la seccion 'coefficients'
+el logaritmo de la altura vs el volumen del arbol :(~0:25)
+En genomica ... obtenemos el valor estimado y el valor Pr (~0:25)
+```{r}
+summary(lm(log(Volume) ~ log(Height) + log(Girth), data = trees))
+```
+
+5.1 ExploreModelMatrix
+En este moelo queremos (~30)
+```{r}
+## Datos de ejemplo
+(sampleData <- data.frame(
+    genotype = rep(c("A", "B"), each = 4),
+    treatment = rep(c("ctrl", "trt"), 4)
+))
+```
+(sobre los parametros y para que sirve visualizar ~0:30)
+
+```{r}
+## Creemos las imágenes usando ExploreModelMatrix
+vd <- ExploreModelMatrix::VisualizeDesign(
+    sampleData = sampleData,
+    designFormula = ~ genotype + treatment,
+    textSizeFitted = 4
+)
+
+## Veamos las imágenes
+cowplot::plot_grid(plotlist = vd$plotlist)
+```
+De forma interactiva podemos usar el siguiente codigo:
+```{r}
+library(ExploreModelMatrix)
+## Usaremos shiny otra ves
+app <- ExploreModelMatrix(
+    sampleData = sampleData,
+    designFormula = ~ genotype + treatment
+)
+if (interactive()) shiny::runApp(app)
+```
+
+Ejemplo2
+Podemos interpretar la tabla del objeto ExploreModelMatrix
+restando la primera columna de la segunda.
+
+Ejemplo3
+Si no queremos usar la variable 'intercept' escribimos un '0' despues de la tilde
+(elminar la variable 'conditionko_minus' ~1:00)
+
+5.2 Datos de SRP045638
+```{r}
+library("recount3")
+
+human_projects <- available_projects()
+
+rse_gene_SRP045638 <- create_rse(
+    subset(
+        human_projects,
+        project == "SRP045638" & project_type == "data_sources"
+    )
+)
+```
+
+```{r}
+assay(rse_gene_SRP045638, "counts") <- compute_read_counts(rse_gene_SRP045638)
+
+```
+
+Una vez descargados y con los números de lecturas podemos usar expand_sra_attributes(). Sin embargo, tenemos un problema con estos datos.
+
+```{r}
+rse_gene_SRP045638$sra.sample_attributes[1:3]
+#Podemos observar que las columnas tenemos el mismo # de columnas...
+```
+
+Vamos a intentar resolverlo eliminando información que está presente solo en ciertas muestras.
+```{r}
+rse_gene_SRP045638$sra.sample_attributes <- gsub("dev_stage;;Fetal\\|", "",   rse_gene_SRP045638$sra.sample_attributes)
+rse_gene_SRP045638$sra.sample_attributes[1:3]
+```
+
+Ahora si podemos continuar con el mismo código de ayer.
+```{r}
+rse_gene_SRP045638 <- expand_sra_attributes(rse_gene_SRP045638)
+
+colData(rse_gene_SRP045638)[
+    ,
+    grepl("^sra_attribute", colnames(colData(rse_gene_SRP045638)))
+]
+#observamos que algunas columnas necesitan cambiarse de tipo de dato...
+```
+
+Como ahora si vamos a usar esta información para un modelo estadístico, será importante que tengamos en el formato correcto de R a la información que vamos a usar.
+```{r}
+## Pasar de character a nuemric o factor
+rse_gene_SRP045638$sra_attribute.age <- as.numeric(rse_gene_SRP045638$sra_attribute.age)
+rse_gene_SRP045638$sra_attribute.disease <- factor(rse_gene_SRP045638$sra_attribute.disease)
+rse_gene_SRP045638$sra_attribute.RIN <- as.numeric(rse_gene_SRP045638$sra_attribute.RIN)
+rse_gene_SRP045638$sra_attribute.sex <- factor(rse_gene_SRP045638$sra_attribute.sex)
+
+## Resumen de las variables de interés
+summary(as.data.frame(colData(rse_gene_SRP045638)[
+    ,
+    grepl("^sra_attribute.[age|disease|RIN|sex]", colnames(colData(rse_gene_SRP045638)))
+]))
+```
+
+Ahora crearemos un par de variables para que las podamos usar en nuestro análisis.
+```{r}
+## Encontraremos diferencias entre muestra prenatalas vs postnatales
+rse_gene_SRP045638$prenatal <- factor(ifelse(rse_gene_SRP045638$sra_attribute.age < 0, "prenatal", "postnatal"))
+table(rse_gene_SRP045638$prenatal)
+```
+
+Creamos otra variable lecturas aosciadas a genes/(~1:30)
+```{r}
+## http://research.libd.org/recount3-docs/docs/quality-check-fields.html
+rse_gene_SRP045638$assigned_gene_prop <- rse_gene_SRP045638$recount_qc.gene_fc_count_all.assigned / rse_gene_SRP045638$recount_qc.gene_fc_count_all.total
+summary(rse_gene_SRP045638$assigned_gene_prop)
+```
+
+```{r}
+# Hm... veamos si hay una diferencia entre los grupos
+with(colData(rse_gene_SRP045638), tapply(assigned_gene_prop, prenatal, summary))
+```
+A continuación podemos eliminar algunas muestras que consideremos de baja calidad y genes con niveles de expresión muy bajos. (y que no hay diferencias marcadas)
+
+```{r}
+## Guardemos nuestro objeto entero por si luego cambiamos de opinión
+rse_gene_SRP045638_unfiltered <- rse_gene_SRP045638
+
+## Eliminemos a muestras malas
+hist(rse_gene_SRP045638$assigned_gene_prop)
+```
+Sobre el criterio(~1:40)
+```{r}
+table(rse_gene_SRP045638$assigned_gene_prop < 0.3)
+```
+
+```{r}
+rse_gene_SRP045638 <- rse_gene_SRP045638[, rse_gene_SRP045638$assigned_gene_prop > 0.3]
+
+## Calculemos los niveles medios de expresión de los genes en nuestras
+## muestras.
+## Ojo: en un análisis real probablemente haríamos esto con los RPKMs o CPMs
+## en vez de las cuentas.
+gene_means <- rowMeans(assay(rse_gene_SRP045638, "counts"))
+summary(gene_means)
+```
+(sobre porque eliminamos genes ~1:42)
+```{r}
+## Eliminamos genes
+rse_gene_SRP045638 <- rse_gene_SRP045638[gene_means > 0.1, ]
+
+## Dimensiones finales
+dim(rse_gene_SRP045638)
+```
+```{r}
+## Porcentaje de genes que retuvimos
+round(nrow(rse_gene_SRP045638) / nrow(rse_gene_SRP045638_unfiltered) * 100, 2)
+```
+
+Ahora ya estamos listos para continuar con el análisis de expresión diferencial, bueno, casi.
+
+5.3 Normalización de datos
+```{r}
+library("edgeR") # BiocManager::install("edgeR", update = FALSE)
+dge <- DGEList(
+    counts = assay(rse_gene_SRP045638, "counts"),
+    genes = rowData(rse_gene_SRP045638)
+)
+dge <- calcNormFactors(dge)
+```
+
+5.4 Expresión diferencial
+Primero que nada, definamos nuestro modelo estadístico. Típicamente, exploraríamos más los datos para revisar que no haya otros problemas con las muestras y para explorar la relación entre nuestras variables.
+
+```{r}
+library("ggplot2")
+ggplot(as.data.frame(colData(rse_gene_SRP045638)), aes(y = assigned_gene_prop, x = prenatal)) +
+    geom_boxplot() +
+    theme_bw(base_size = 20) +
+    ylab("Assigned Gene Prop") +
+    xlab("Age Group")
+
+##usando el paquete de variancePartition y scater entre otros tal como exploramos en el siguiente video del club de R de LIBD(links en el libro)
+```
+
+Por ahora continuaremos con el siguiente modelo estadístico.
+```{r}
+mod <- model.matrix(~ prenatal + sra_attribute.RIN + sra_attribute.sex + assigned_gene_prop,
+    data = colData(rse_gene_SRP045638)
+)
+#nuestras variables categoricas
+colnames(mod)
+
+#prenatalprenatal es porque el grupo de referencia es postnatal
+```
+Ya teniendo el modelo estadístico, podemos usar limma para realizar el análisis de expresión diferencial como tal.
+limma incorpora modelos de regresion lineal
+mas rapidos de evaluar y estables mejores estimados de sd. y tvalues.
+```{r}
+library("limma")
+# 
+vGene <- voom(dge, mod, plot = TRUE)
+```
+lmFit: funcion de regresion lineal de limma.
+```{r}
+eb_results <- eBayes(lmFit(vGene))
+#
+de_results <- topTable(
+    eb_results,
+    #numero del coeficiente que nos interesa 'prenatalprenatal'
+    coef = 2,
+    #numero de observaciones a mostrar
+    number = nrow(rse_gene_SRP045638),
+    #para que no ordene los resultados
+    sort.by = "none"
+)
+dim(de_results)
+```
+```{r}
+head(de_results)
+#La columna que nos interesa es adj.P.val
+```
+
+```{r}
+## Genes diferencialmente expresados entre pre y post natal con FDR < 5%
+table(de_results$adj.P.Val < 0.05)
+```
+```{r}
+## Visualicemos los resultados estadísticos
+plotMA(eb_results, coef = 2)
+
+#(sobre lo que expresa la tabla ~2:40)
+```
+Podemos buscar genes en 'genecards'
+```{r}
+volcanoplot(eb_results, coef = 2, highlight = 3, names = de_results$gene_name)
+#(~2:40)
+
+```
+
+5.5 Visualizando genes DE
+De vGene$E podemos extraer los datos normalizados por limma-voom. Revisemos los top 50 genes diferencialmente expresados.
+
+Cada renglon es un gen(los de mayor expresion diferencial). El cluster del lado izq:prenatal, der: postnatal.
+```{r}
+## Extraer valores de los genes de interés
+exprs_heatmap <- vGene$E[rank(de_results$adj.P.Val) <= 50, ]
+
+## Creemos una tabla con información de las muestras
+## y con nombres de columnas más amigables
+df <- as.data.frame(colData(rse_gene_SRP045638)[, c("prenatal", "sra_attribute.RIN", "sra_attribute.sex")])
+colnames(df) <- c("AgeGroup", "RIN", "Sex")
+
+## Hagamos un heatmap
+library("pheatmap")
+pheatmap(
+    exprs_heatmap,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    show_rownames = TRUE,
+    show_colnames = FALSE,
+    annotation_col = df
+)
+```
+Los resultados que tenemos no son tan sorprendentes porque hay una diferencia enorme en los perfiles de expresión en el DLPFC entre muestra pre y post-natales. Eso lo podemos ver con MDS (multidimensional scaling) tal como describen en este workflow.
+
+```{r}
+library("pheatmap")
+nombres_rse_gene <-rowRanges(rse_gene_SRP045638)$gene_name
+id_rse_gene <- rowRanges(rse_gene_SRP045638)$gene_id
+
+exprs_heatmap <- vGene$E[rank(de_results$adj.P.Val) <= 50, ]
+posiciones <- match(rownames(exprs_heatmap),id_rse_gene)
+# hacer un subconjunto de los ronames 
+filtered_id_names <-rowRanges(rse_gene_SRP045638)$gene_name[posiciones]
+
+# remplazar los nombres de exprs_heatmap
+head(exprs_heatmap)
+exprs_heatmap
+row.names(exprs_heatmap) <- filtered_id_names
+
+pheatmap(
+exprs_heatmap,
+# que agrupe los genes tanto en renglones como en cols que son las muestras
+cluster_rows = TRUE,
+cluster_cols = TRUE,
+show_rownames = TRUE,
+show_colnames = FALSE,
+annotation_col = df
+) 
+
+# default value of pdf is 4
+pdf("pheatmap_con_nombres.pdf", height=14, useDingbats = FALSE)
+## Y luego podemos cambiar el valor de show_rownames de FALSE a TRUE
+pheatmap(
+exprs_heatmap,
+# que agrupe los genes tanto en renglones como en cols que son las muestras
+cluster_rows = TRUE,
+cluster_cols = TRUE,
+show_rownames = TRUE,
+show_colnames = FALSE,
+annotation_col = df
+)
+#dev.off() 
+```
+
+```{r}
+## Para colores
+library("RColorBrewer")
+
+## Conviertiendo los grupos de edad a colores
+col.group <- df$AgeGroup
+levels(col.group) <- brewer.pal(nlevels(col.group), "Set1")
+```
+
+```{r}
+col.group <- as.character(col.group)
+
+## MDS por grupos de edad
+plotMDS(vGene$E, labels = df$AgeGroup, col = col.group)
+```
+```{r}
+## Conviertiendo los valores de Sex a colores
+col.sex <- df$Sex
+levels(col.sex) <- brewer.pal(nlevels(col.sex), "Dark2")
+```
+```{r}
+col.sex <- as.character(col.sex)
+
+## MDS por sexo
+plotMDS(vGene$E, labels = df$Sex, col = col.sex)
+```
+
