@@ -181,6 +181,7 @@ round(nrow(rse_gene_SRP045638) / nrow(rse_gene_SRP045638_unfiltered) * 100, 2)
 
 Ahora ya estamos listos para continuar con el análisis de expresión diferencial, bueno, casi.
 
+<<<<<<< HEAD
 5.3 Normalización de datos
 ```{r}
 library("edgeR") # BiocManager::install("edgeR", update = FALSE)
@@ -359,3 +360,5 @@ col.sex <- as.character(col.sex)
 plotMDS(vGene$E, labels = df$Sex, col = col.sex)
 ```
 
+=======
+>>>>>>> 9a65f07204a18ac9fea5d021b34980056b673e5c

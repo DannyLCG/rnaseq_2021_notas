@@ -1,0 +1,94 @@
+---
+title: "02-Bioconductor"
+output: html_document
+---
+
+#3 OBJETOS DE BIOCONDUCTOR
+
+El objeto SummarizedExperiment tiene 3 tablas: laa tablas 'rowRanges'(rowData) y 'counts'(assays) tienen un gen por cada renglon,
+aunque 'assays', junto con la tercer tabla 'colData'contienen  una muestra por cada columna
+
+SummarizedExperiment depende de algunos otros paquetes:
+  El paquete GenomicRanges nos ayuda a guardar informacion sobre los genes.
+
+```{r}
+library(SummarizedExperiment)
+
+## Creamos los datos para nuestro objeto de tipo SummarizedExperiment
+## para 200 genes a lo largo de 6 muestras
+nrows <- 200
+ncols <- 6
+## Números al azar de cuentas
+set.seed(20210223)
+counts <- matrix(runif(nrows * ncols, 1, 1e4), nrows)
+## Información de nuestros genes
+rowRanges <- GRanges(
+  rep(c("chr1", "chr2"), c(50, 150)),
+  IRanges(floor(runif(200, 1e5, 1e6)), width = 100),
+  strand = sample(c("+", "-"), 200, TRUE),
+  feature_id = sprintf("ID%03d", 1:200)
+)
+names(rowRanges) <- paste0("gene_", seq_len(length(rowRanges)))
+
+```
+```{r}
+## Información de nuestras muestras
+colData <- DataFrame(
+  Treatment = rep(c("ChIP", "Input"), 3),
+  row.names = LETTERS[1:6]
+)
+## Juntamos ahora toda la información en un solo objeto de R
+rse <- SummarizedExperiment(
+  assays = SimpleList(counts = counts),
+  rowRanges = rowRanges,
+  colData = colData
+)
+```
+
+```{r}
+## Número de genes y muestras
+dim(rse)
+```
+```{r}
+## IDs de nuestros genes y muestras
+dimnames(rse)
+```
+```{r}
+## Nombres de tablas de cuentas que tenemos (RPKM, CPM, counts, logcounts, etc)
+assayNames(rse)
+```
+```{r}
+## El inicio de nuestra tabla de cuentas
+head(assay(rse))
+```
+```{r}
+## Información de los genes en un objeto de Bioconductor
+rowRanges(rse)
+```
+```{r}
+#Para obtener los cromosomas, el cual tiene que ver con elobjeto GeneRanges
+seqlevels(rse)
+#o
+seqnames(rowRanges(rse))
+
+```
+
+```{r}
+#Para conocer el tamano de un objeto
+pryr::object_size(rse)
+```
+```{r}
+#3.2 EJERCICIO
+
+#Explica que sucede en las siguientes lineas de codigo.
+## Comando 1
+rse[1:2, ]
+#fija los primeros 2 renglones(genes) y regresa todas las condiciones de esos genes.
+```
+```{r}
+## Comando 2
+rse[, c("A", "D", "F")]
+#fija las condiciones 'A', 'D' y 'F' y regresa informacion de los 200 genes
+
+```
+
