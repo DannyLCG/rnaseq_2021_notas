@@ -288,22 +288,26 @@ Los resultados que tenemos no son tan sorprendentes porque hay una diferencia en
 
 ```{r}
 library("pheatmap")
-nombres_rse_gene <-rowRanges(rse_gene_SRP045638)$gene_name
-id_rse_gene <- rowRanges(rse_gene_SRP045638)$gene_id
 
 exprs_heatmap <- vGene$E[rank(de_results$adj.P.Val) <= 50, ]
+#Extraemos los IDs de la tabla rowRanges
+id_rse_gene <- rowRanges(rse_gene_SRP045638)$gene_id
+#Extraemos un vector con las posiciones de los nombres en expr_heatmap
 posiciones <- match(rownames(exprs_heatmap),id_rse_gene)
-# hacer un subconjunto de los ronames 
+#Filtramos los nombres utilizando el vector de posiciones
 filtered_id_names <-rowRanges(rse_gene_SRP045638)$gene_name[posiciones]
+#o alternativamente 
+## Con match() podemos encontrar cual es cual
+# rownames(exprs_heatmap) <- rowRanges(rse_gene_SRP045638)$gene_name[
+#     match(rownames(exprs_heatmap), rowRanges(rse_gene_SRP045638)$gene_id)
+# ]
 
-# remplazar los nombres de exprs_heatmap
-head(exprs_heatmap)
-exprs_heatmap
+# remplazar los nombres de los renglones en exprs_heatmap
 row.names(exprs_heatmap) <- filtered_id_names
 
 pheatmap(
 exprs_heatmap,
-# que agrupe los genes tanto en renglones como en cols que son las muestras
+# para agrupar los genes y las muestras
 cluster_rows = TRUE,
 cluster_cols = TRUE,
 show_rownames = TRUE,
@@ -311,20 +315,22 @@ show_colnames = FALSE,
 annotation_col = df
 ) 
 
-# default value of pdf is 4
+```
+```{r}
+#Guardaremos el heatmap en un PDF largo
 pdf("pheatmap_con_nombres.pdf", height=14, useDingbats = FALSE)
-## Y luego podemos cambiar el valor de show_rownames de FALSE a TRUE
+
 pheatmap(
 exprs_heatmap,
-# que agrupe los genes tanto en renglones como en cols que son las muestras
 cluster_rows = TRUE,
 cluster_cols = TRUE,
 show_rownames = TRUE,
 show_colnames = FALSE,
 annotation_col = df
 )
-#dev.off() 
+dev.off()
 ```
+
 
 ```{r}
 ## Para colores

@@ -1,0 +1,32 @@
+#Ejercicio en Equipo-Explorando paquetes de Bioconductor
+##Michel Mourra, Dante Torres, Eduardo Arrieta, Daniel Lopez
+
+1.- Hummingbird
+2.- ncRNAtools
+3.- ToxicoGx
+4.- ChromScape
+5.- Musicatk
+6.- Verso
+7.- RIPAT
+8.- VELOCIRAPTOR
+
+Los paquetes que no tienen preguntas talvez sea porque son paquetes recientes(menores a 6 meses en Bioconductor).
+
+
+1.- ##*Hummingbird:*
+No encontramos preguntas, pasa las pruebas para todos los sistemas, poco numero de descargas, talvez porque lo que realiza es demasiado específico, la documentacion se ve decente. Calificacion final 8.
+
+2.- ncRNAtools:* Fallo algunas pruebas en linux. No hay preguntas aun,la documentacion es buena, pocas descargas aunque sea mas general que el paquete anterior. Calificacion final 7.
+
+3.- *ToxicoFx:* No hay preguntas, pasa pruebas para todos los sistemas, auqnue requiere demasiadas dependencias, lo cual podria alentar el proceso de instalacion, el numero de descargas es mayor que los dos anteriores, aunque la documentacion es corta es explicativa. Calificación final 8.5
+
+4.- *ChromeSScape*: Una sola pregunta en relacion a que el paquete solo esta disponible en versiones de R >= 4, uno de los autores respondio al dia siguiente e incluso menciona que el paquete estara disponible para versiones inferiores a la 4. Muchísimas dependencias(casi 130), pasó las pruebas en todos los sistemas. La documentación es buena y agradable a la vista. En mi opinion personal es un paquete super completo para el analisis de conformacion de la cromatina con datos provenientes de diferentes experimentos. Calificación final 9.5
+
+5.- *Mutational Signature Comprehensive Analisis Toolkit:*  En los ultimos 5 meses recibio 11 preguntas en el repositorio de Github, las cuales solo 1 ha sido respondida sin mucha ayuda aparente. Demasiadas dependencias(casi 200), se ve que no ha habido muchos cambios y la página esta algo descuidada. La documentacion es decente y explicativa.  Calificacion Final 8.5
+
+6.- *VERSO:*
+No requiere tantas dependencias como los paquetes anteriores, pasa todo los sistemas operativos, aunque nos parecio un paquete muy útil para la situación actual del SARSS-CoV2 es extrañamente poco descargado, la documentacion en formato PDF es muy completa. Calificación Final 8.5
+
+7.- *RIPAT:* No encontramos preguntas, pasó todas las pruebasy la documentación está muy completa y bien explicada. A mi equipo y a mi, la aplicacion del paquete nos parece interesante: anotacion de sitios de insercion viral.Calificacion final 9.5
+
+8.- *VELOCIRAPTOR:* Parece ser un paquete que le agrada mucho a los usuarios, en la seccion de issues hay algunas sugerencias e incluso felicitaciones, pocas preguntas, de las cuales los desarrolladores han estado al tanto, resolviendo la mayoria de estas. Buen número de descargas y de dependencias, pasó todas las pruebas y la documentación se ve completa y con buena presentacion. Además tiene un buen nombre que apela al sentido del humor del usuario. Calificacion Final 9
