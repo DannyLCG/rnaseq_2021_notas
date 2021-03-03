@@ -1,0 +1,275 @@
+---
+title: "Differential Expression Analysis"
+author: "O. Daniel Lopez Olmos"
+date: "3/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Utilizaremos datos provenientes de un experimento orientado a identificar biomarcadores endocrinos para predecir la progresion de la infeccion por Mycobacterium tuberculosis con el fin de combatir la epidemia en el contexto de contactos domiciliarios.
+
+# Deshacernos de los NAs e investigar porque la box plot no tiene diferencias. y ver los p values con head de
+# deResults
+```{r}
+
+library("recount3")
+#seleccionamos nuestro dataset con nombre de proyecto 'SRP098758'
+humanProjects <- available_projects()
+projectInfo <- subset(humanProjects, project == "SRP098758" & project_type == "data_sources"
+)
+```
+
+```{r}
+#library("recount")
+#library("edgeR")
+#assay(rseProjectTB, "counts") <- getRPKM(rseProjectTB)
+#assay(rseProjectTB, "counts") <- cpm(rseProjectTB)
+
+#creamos el objeto RSE 
+rseProjectTB <- create_rse(projectInfo)
+#convertimos las cuentas de nivel de nucleotido a nivel de lectura con la funcion
+#'compute_read_counts()'
+assay(rseProjectTB, "counts") <- compute_read_counts(rseProjectTB)
+
+```
+
+Para investigar si nuestros datos requieren limpeza, exploramos los atributos de las muestras 'rsa.sample_attributes'.
+```{r}
+#para investigar si nuestros datos requieren limpeza,
+#exploramos los atributos de las muestras
+head(rseProjectTB$sra.sample_attributes)
+```
+
+En el output de la celda anterior se observa que el numero de atributos parace ser el mismo en todas las muestras...
+Expandemos la informacion de estos atributos.
+```{r}
+rseProjectTB <- expand_sra_attributes(rseProjectTB)
+```
+
+Para poder utilizar nuestra informacion de la manera correcta, necesitamos contar con  los tipos de dato adecuados.
+```{r}
+#exploramos de nuevo los atributos para identificar datos que necesiten 'coercion'
+colData(rseProjectTB)[
+    ,
+    grepl("^sra_attribute", colnames(colData(rseProjectTB)))
+]
+```
+
+Se observa que algunos atributos necesitan coercion.
+No podemos clasificar por 'tissue' porque todas las muestras provienen de sangre, asi que lo dejamos como caracter.
+```{r}
+#transformamos las NAs en ceros para no tener problemas con la coercion
+rseProjectTB$sra_attribute.age[is.na(rseProjectTB$sra_attribute.age)] <- 0
+
+#convertimos a los tipos de dato adecuados
+rseProjectTB$sra_attribute.age <- as.numeric(rseProjectTB$sra_attribute.age)
+rseProjectTB$sra_attribute.gender <- factor(rseProjectTB$sra_attribute.gender, exclude = "NA")
+rseProjectTB$sra_attribute.group <- factor(rseProjectTB$sra_attribute.group, exclude = "NA")
+rseProjectTB$sra_attribute.site <- factor(rseProjectTB$sra_attribute.site, exclude = "NA")
+```
+
+Resumen de las variables que podrian ser de interes
+```{r}
+summary(as.data.frame(colData(rseProjectTB)[
+    ,
+    grepl("^sra_attribute.[age|gender|group|sex]", colnames(colData(rseProjectTB)))
+]))
+```
+
+Ahora podemos definir las variables a utilizar en el analisis.
+La OMS sugiere que las mujeres sufren una mayor afeccion por esta infeccion, por lo que resulta interesante investigar las diferencias de expresion entre hombres y mujeres.
+```{r}
+#Definiendo el genero de las muestras como factor
+rseProjectTB$Femenino <- factor(ifelse(rseProjectTB$sra_attribute.gender == 'female', "Femenino", "Masculino"), exclude = NA)
+table(rseProjectTB$Femenino)
+```
+
+Observamos la calidad
+```{r}
+#WHAT FOR?
+rseProjectTB$assigned_gene_prop <- rseProjectTB$recount_qc.gene_fc_count_all.assigned / rseProjectTB$recount_qc.gene_fc_count_all.total
+
+summary(rseProjectTB$assigned_gene_prop)
+```
+
+```{r}
+#MEANING?
+with(colData(rseProjectTB), plot(assigned_gene_prop, sra_attribute.gender))
+```
+
+```{r}
+#COULD BE USEFUL
+with(colData(rseProjectTB), plot(assigned_gene_prop, sra_attribute.age))
+```
+
+Veamos si existen diferencias entre los grupos.
+```{r}
+with(colData(rseProjectTB), tapply(assigned_gene_prop, Femenino, summary))
+```
+
+Observemos la frecuencia de las muestras
+```{r}
+#Guardemos nuestro objeto entero por si luego cambiamos de opinión
+rseProjectTBUnfilt <- rseProjectTB
+#Graficamos la frecuencia de las muestras
+hist(rseProjectTB$assigned_gene_prop)
+```
+
+Segun el histograma anterior, podemos prescindir de las muestras menores a 0.35 y mayores a 0.75.
+```{r}
+table(rseProjectTB$assigned_gene_prop < 0.35 | rseProjectTB$assigned_gene_prop > 0.75)
+```
+
+Elminemos estas 17 muestras y mostremos los niveles medios de expresion de nuestras muestras.
+
+Nota: En esta seccion se aconseja mostrar los niveles de expresion utilizando RPKMs o CPMs. Hace falta el paquete 'recount' en el servidor, el cual contiene la funcion 'getRPKM()'. El output de esta funcion es el que se utiliza para obtener las cuentas por millon(CPM) con la funcion 'cpm()' del paquete 'edgeR'. Ppodriamos solucionarloen el futuro, por el momento, usaremos las cuentas...
+```{r}
+#removemos las muestras con baja frecuencia, mantenemos 411
+rseProjectTB <- rseProjectTB[, rseProjectTB$assigned_gene_prop > 0.35 & rseProjectTB$assigned_gene_prop < 0.75]
+
+#Calculemos los niveles medios de expresion 
+geneMeans <- rowMeans(assay(rseProjectTB, "counts"))
+summary(geneMeans)
+```
+
+Los resultados obtenidos en la celda anterior muestran que por lo menos 1/4 de nuestras muestras no contienen valores informativos. Por lo que podemos eliminar algunos de estos datos. Los valores son tan bajos, que incluso podemos usar la mediana como valor de corte.
+```{r}
+#Eliminamos genes
+rseProjectTB <- rseProjectTB[geneMeans > 0.6, ]
+
+#Dimensiones finales
+dim(rseProjectTB)
+```
+Porcentaje de muestras retenidas
+```{r}
+round(nrow(rseProjectTB) / nrow(rseProjectTBUnfilt) * 100, 2)
+```
+
+# Normalizando los datos
+```{r}
+library("edgeR")
+dge <- DGEList(
+    counts = assay(rseProjectTB, "counts"),
+    genes = rowData(rseProjectTB)
+)
+#calculando los factores de normalizacion para nuestros datos
+dge <- calcNormFactors(dge)
+```
+
+Intentemos visualizar la relacion entre nuestras variables antes de comenzar el analisis de expresion diferencial.
+```{r}
+library("ggplot2")
+ggplot(as.data.frame(colData(rseProjectTB)), aes(y = assigned_gene_prop,
+                                               x = rseProjectTB$Femenino)) +
+    geom_boxplot() +
+    theme_bw(base_size = 20) +
+    ylab("Assigned Gene Proportion") +
+    xlab("Gender")
+#PODEMOS CONSIDERAR EN GRAFICAR CONTRA EDAD
+```
+
+```{r}
+#NO USA LOS NIVELES?
+rseProjectTB$Femenino[1:3]
+```
+
+
+```{r}
+library("ggplot2")
+ggplot(as.data.frame(colData(rseProjectTB)), aes(y = assigned_gene_prop,
+                                               group = rseProjectTB$sra_attribute.age)) +
+    geom_boxplot() +
+    theme_bw(base_size = 20) +
+    ylab("Assigned Gene Proportion") +
+    xlab("Age Group")
+#PODEMOS CONSIDERAR EN GRAFICAR CONTRA EDAD
+```
+
+
+
+Creamos el modelo estadistico usando la funcion 'model.matrix()'.
+```{r}
+statModel <- model.matrix(~ Femenino + sra_attribute.group + sra_attribute.age + assigned_gene_prop,
+    data = colData(rseProjectTB)
+)
+colnames(statModel)
+```
+
+
+# DE analysis using 'limma'.
+
+```{r}
+library("limma")
+vGene <- voom(dge, statModel, plot = TRUE)
+```
+
+```{r}
+rseProjectTB$sra_attribute.group[1:3]
+```
+
+
+```{r}
+eBresults <- eBayes(lmFit(vGene))
+
+deResults <- topTable(
+    eBresults,
+    coef = 2,
+    number = nrow(rseProjectTB),
+    sort.by = "none"
+)
+
+dim(deResults)
+```
+
+```{r}
+head(deResults)
+#LOS P-VALUES SON MALISIMOS!
+```
+
+```{r}
+# Genes diferencialmente expresados entre pre y post natal con FDR < 5%
+table(deResults$adj.P.Val < 0.05)
+```
+
+```{r}
+# Visualicemos los resultados estadísticos
+plotMA(eBresults, coef = 2)
+```
+
+```{r}
+volcanoplot(eBresults, coef = 2, highlight = 3, names = deResults$gene_name)
+```
+
+```{r}
+deResults[deResults$gene_name %in% c("FBLN2", "MANEAL", "IGFBP3"), ]
+```
+
+# Visualizacion
+
+Visualizaremos los 50 genes con una mayor DE
+```{r}
+# Extraer valores de los genes de interés
+exprs_heatmap <- vGene$E[rank(deResults$adj.P.Val) <= 50, ]
+
+## Creemos una tabla con información de las muestras
+## y con nombres de columnas más amigables
+df <- as.data.frame(colData(rseProjectTB)[, c("sra_attribute.age", "sra_attribute.gender")])
+colnames(df) <- c("AgeGroup", "Sex")
+
+## Hagamos un heatmap
+library("pheatmap")
+pheatmap(
+    exprs_heatmap,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    show_rownames = FALSE,
+    show_colnames = FALSE,
+    annotation_col = df
+)
+```
+
+
